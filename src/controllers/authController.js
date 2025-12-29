@@ -99,25 +99,183 @@ export const googleCallback = async (req, res) => {
   try {
     if (!req.user) {
       console.error('❌ No user found in request after Google auth');
-      const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3000';
-      return res.redirect(`${frontendURL}/login?error=auth_failed`);
+      
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Authentication Failed</title>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                margin: 0;
+                background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                color: white;
+              }
+              .message {
+                text-align: center;
+                padding: 2rem;
+                background: rgba(255,255,255,0.1);
+                border-radius: 1rem;
+                backdrop-filter: blur(10px);
+              }
+            </style>
+          </head>
+          <body>
+            <div class="message">
+              <h2>❌ Authentication Failed</h2>
+              <p>User not authenticated</p>
+              <p>This window will close in 3 seconds...</p>
+            </div>
+            <script>
+              if (window.opener) {
+                window.opener.postMessage(
+                  { error: 'User not authenticated' },
+                  '${process.env.FRONTEND_URL || 'http://localhost:3000'}'
+                );
+                setTimeout(() => window.close(), 3000);
+              } else {
+                setTimeout(() => {
+                  window.location.href = '${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed';
+                }, 3000);
+              }
+            </script>
+          </body>
+        </html>
+      `);
     }
 
     console.log('✓ Google authentication successful for user:', req.user.email);
 
     const token = generateToken(req.user._id);
-    const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3000';
-
-    // Redirect to frontend with token and user info
-    const redirectURL = `${frontendURL}/auth/callback?token=${token}&name=${encodeURIComponent(req.user.name)}&email=${encodeURIComponent(req.user.email)}`;
+    const user = {
+      id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+    };
     
-    console.log('✓ Redirecting to:', redirectURL);
-    res.redirect(redirectURL);
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Authentication Successful</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              margin: 0;
+              background: linear-gradient(135deg, #f97316 0%, #16a34a 100%);
+              color: white;
+            }
+            .message {
+              text-align: center;
+              padding: 2rem;
+              background: rgba(255,255,255,0.1);
+              border-radius: 1rem;
+              backdrop-filter: blur(10px);
+            }
+            .spinner {
+              width: 40px;
+              height: 40px;
+              margin: 1rem auto;
+              border: 4px solid rgba(255,255,255,0.3);
+              border-top-color: white;
+              border-radius: 50%;
+              animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+              to { transform: rotate(360deg); }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="message">
+            <div class="spinner"></div>
+            <h2>✓ Authentication Successful!</h2>
+            <p>Closing window...</p>
+          </div>
+          <script>
+            try {
+              if (window.opener) {
+                window.opener.postMessage(
+                  { 
+                    token: '${token}',
+                    user: ${JSON.stringify(user)}
+                  },
+                  '${process.env.FRONTEND_URL || 'http://localhost:3000'}'
+                );
+                setTimeout(() => window.close(), 1000);
+              } else {
+                window.location.href = '${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/callback?token=${token}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}';
+              }
+            } catch (error) {
+              console.error('Popup error:', error);
+              window.location.href = '${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/callback?token=${token}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}';
+            }
+          </script>
+        </body>
+      </html>
+    `);
+
+    console.log('✓ Authentication response sent to popup window');
 
   } catch (error) {
     console.error('❌ Error in googleCallback:', error);
-    const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3000';
-    res.redirect(`${frontendURL}/login?error=server_error&message=${encodeURIComponent(error.message)}`);
+    
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Authentication Failed</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              margin: 0;
+              background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+              color: white;
+            }
+            .message {
+              text-align: center;
+              padding: 2rem;
+              background: rgba(255,255,255,0.1);
+              border-radius: 1rem;
+              backdrop-filter: blur(10px);
+            }
+          </style>
+        </head>
+        <body>
+          <div class="message">
+            <h2>❌ Authentication Failed</h2>
+            <p>${error.message || 'Something went wrong'}</p>
+            <p>This window will close in 3 seconds...</p>
+          </div>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage(
+                { error: '${error.message || 'Authentication failed'}' },
+                '${process.env.FRONTEND_URL || 'http://localhost:3000'}'
+              );
+              setTimeout(() => window.close(), 3000);
+            } else {
+              setTimeout(() => {
+                window.location.href = '${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=server_error';
+              }, 3000);
+            }
+          </script>
+        </body>
+      </html>
+    `);
   }
 };
 
