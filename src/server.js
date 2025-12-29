@@ -2,8 +2,6 @@ import './loadEnv.js';
 import express from 'express';
 import cors from 'cors';
 import session from 'express-session';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import connectDB from './config/db.js';
 import passport from './config/passport.js';
 import authRoutes from './routes/authRoutes.js';
@@ -19,6 +17,7 @@ console.log('GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL || 'Using de
 console.log('SESSION_SECRET:', process.env.SESSION_SECRET ? '✓ Loaded' : '✗ NOT FOUND');
 console.log('FRONTEND_URL:', process.env.FRONTEND_URL || 'Using default');
 console.log('PORT:', process.env.PORT || '5000');
+console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
 console.log('===================================\n');
 
 const app = express();
@@ -26,7 +25,7 @@ const app = express();
 // Connect to database
 connectDB();
 
-// CORS configuration - UPDATED TO SUPPORT MULTIPLE ORIGINS
+// CORS configuration
 const allowedOrigins = [
   'https://www.kecbiofuel.com',
   'https://kecbiofuel.com',
@@ -51,13 +50,13 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  maxAge: 86400 // 24 hours - cache preflight requests
+  maxAge: 86400
 }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Session configuration (MUST come before passport)
+// Session configuration
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'fallback-secret-key-change-in-production',
@@ -67,12 +66,13 @@ app.use(
       maxAge: 24 * 60 * 60 * 1000,
       secure: process.env.NODE_ENV === 'production',
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Important for cross-site cookies
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      domain: process.env.NODE_ENV === 'production' ? '.kecbiofuel.com' : undefined,
     },
   })
 );
 
-// Initialize passport (using the configured instance)
+// Initialize passport
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -80,11 +80,13 @@ app.use(passport.session());
 app.use('/api/auth', authRoutes);
 app.use('/api/comments', commentRoutes);
 
+// Health check route
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Blog Backend API is running',
     googleOAuthConfigured: !!process.env.GOOGLE_CLIENT_ID,
-    allowedOrigins: allowedOrigins
+    allowedOrigins: allowedOrigins,
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
@@ -101,5 +103,6 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`✓ Server running on port ${PORT}`);
+  console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`✓ CORS enabled for: ${allowedOrigins.join(', ')}`);
 });
