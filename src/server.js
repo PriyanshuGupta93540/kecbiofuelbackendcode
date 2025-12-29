@@ -5,17 +5,11 @@ import session from 'express-session';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import connectDB from './config/db.js';
-import passport from './config/passport.js';  // Import configured passport
+import passport from './config/passport.js';
 import authRoutes from './routes/authRoutes.js';
 import commentRoutes from './routes/commentRoutes.js';
 
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = dirname(__filename);
-
-// Load environment variables FIRST
-// dotenv.config({ path: join(__dirname, '../.env') });
-
-// Debug: Check ALL Google OAuth variables
+// Debug: Check ALL environment variables
 console.log('\n=== Environment Variables Check ===');
 console.log('MONGODB_URI:', process.env.MONGODB_URI ? '✓ Loaded' : '✗ NOT FOUND');
 console.log('JWT_SECRET:', process.env.JWT_SECRET ? '✓ Loaded' : '✗ NOT FOUND');
@@ -32,10 +26,32 @@ const app = express();
 // Connect to database
 connectDB();
 
-// CORS configuration
+// CORS configuration - UPDATED TO SUPPORT MULTIPLE ORIGINS
+const allowedOrigins = [
+  'https://www.kecbiofuel.com',
+  'https://kecbiofuel.com',
+  'http://localhost:3000',
+  'http://localhost:3001'
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: function(origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`❌ Blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 86400 // 24 hours - cache preflight requests
 }));
 
 app.use(express.json());
@@ -51,6 +67,7 @@ app.use(
       maxAge: 24 * 60 * 60 * 1000,
       secure: process.env.NODE_ENV === 'production',
       httpOnly: true,
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Important for cross-site cookies
     },
   })
 );
@@ -66,7 +83,8 @@ app.use('/api/comments', commentRoutes);
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Blog Backend API is running',
-    googleOAuthConfigured: !!process.env.GOOGLE_CLIENT_ID
+    googleOAuthConfigured: !!process.env.GOOGLE_CLIENT_ID,
+    allowedOrigins: allowedOrigins
   });
 });
 
@@ -82,5 +100,6 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`✓ Server running on http://localhost:${PORT}`);
+  console.log(`✓ Server running on port ${PORT}`);
+  console.log(`✓ CORS enabled for: ${allowedOrigins.join(', ')}`);
 });
